@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mukund Online Classes - 1:1 PCB Coaching Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              navy: '#0b192c',
+              navyLight: '#1e293b',
+              green: '#15803d',
+              greenDark: '#166534',
+              flame: '#f97316',
+              50: '#fbf8f3',
+              100: '#f4ede1',
+              200: '#e7d9c2',
+              300: '#d7c09e',
+              600: '#8c5e31',
+              800: '#432912',
+              900: '#231407',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            handwriting: ['"Caveat"', 'cursive'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1ebd9; }
+    ::-webkit-scrollbar-thumb { background: #d7c09e; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #b09166; }
+    
+    .paper-texture {
+      background-color: #fcfaf7;
+      background-image: radial-gradient(#e5dbc9 0.75px, transparent 0.75px);
+      background-size: 16px 16px;
+    }
+  </style>
+</head>
+<body class="bg-[#f7f3eb] text-slate-800 antialiased min-h-screen selection:bg-amber-200 selection:text-amber-900">
+  <div id="root"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'mukund-pcb-coaching';
+    let db = null;
+    let auth = null;
+
+    try {
+      const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+      if (firebaseConfig && firebaseConfig.apiKey) {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+      }
+    } catch (e) {
+      console.warn("Firebase config notice:", e);
+    }
+
+    const INITIAL_TUTOR_SETTINGS = {
+      tutorName: "Mukund Wankhede",
+      platformName: "Mukund Online Classes",
+      tagline: "Turning Every Stone, Shine Like a Diamond 💎",
+      qualification: "Founder & Lead PCB Educator • 1:1 Personal Mentorship",
+      defaultFee: "500"
+    };
+
+    const INITIAL_STUDENTS = [
+      { id: "tutor1", username: "mukund", password: "123", role: "tutor", name: "Mukund Wankhede", status: "approved" }
+    ];
+
+    const INITIAL_SESSIONS = [];
+    const INITIAL_SCHEDULED_CLASSES = [];
+    const INITIAL_NOTIFICATIONS = [];
+
+    window.PCB_DB = {
+      isFirebaseActive: false,
+      initRealtimeListeners: async (onStatusChange, onDataSync) => {
+        if (!db || !auth) {
+          onStatusChange({ active: false, label: "Local DB Mode" });
+          return;
+        }
+
+        try {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+        } catch (e) {
+          try { await signInAnonymously(auth); } catch(err){}
+        }
+
+        if (!auth.currentUser) {
+          onStatusChange({ active: false, label: "Offline Mode" });
+          return;
+        }
+
+        window.PCB_DB.isFirebaseActive = true;
+        onStatusChange({ active: true, label: "⚡ Real-Time DB Live" });
+
+        const getCol = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
+        const getDocRef = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
+
+        onSnapshot(getCol('users'), (snap) => {
+          if (snap.empty) {
+            INITIAL_STUDENTS.forEach(u => setDoc(getDocRef('users', u.id), u));
+          } else {
+            onDataSync('users', snap.docs.map(d => ({ ...d.data(), id: d.id })));
+          }
+        }, (err) => console.error("Users sync err:", err));
+
+        onSnapshot(getCol('sessions'), (snap) => {
+          if (snap.empty) {
+            INITIAL_SESSIONS.forEach(s => setDoc(getDocRef('sessions', s.id), s));
+          } else {
+            onDataSync('sessions', snap.docs.map(d => ({ ...d.data(), id: d.id })));
+          }
+        }, (err) => console.error("Sessions sync err:", err));
+
+        onSnapshot(getCol('scheduledClasses'), (snap) => {
+          if (snap.empty) {
+            INITIAL_SCHEDULED_CLASSES.forEach(c => setDoc(getDocRef('scheduledClasses', c.id), c));
+          } else {
+            onDataSync('scheduledClasses', snap.docs.map(d => ({ ...d.data(), id: d.id })));
+          }
+        }, (err) => console.error("Classes sync err:", err));
+
+        onSnapshot(getCol('notifications'), (snap) => {
+          if (snap.empty) {
+            INITIAL_NOTIFICATIONS.forEach(n => setDoc(getDocRef('notifications', n.id), n));
+          } else {
+            onDataSync('notifications', snap.docs.map(d => ({ ...d.data(), id: d.id })));
+          }
+        }, (err) => console.error("Notifs sync err:", err));
+
+        onSnapshot(getCol('settings'), (snap) => {
+          if (snap.empty) {
+            setDoc(getDocRef('settings', 'tutorSettings'), INITIAL_TUTOR_SETTINGS);
+          } else {
+            const docData = snap.docs.find(d => d.id === 'tutorSettings')?.data();
+            if (docData) onDataSync('tutorSettings', docData);
+          }
+        }, (err) => console.error("Settings sync err:", err));
+      },
+
+      saveUser: (user) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', user.id), user);
+        }
+      },
+      deleteUser: (userId) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', userId));
+        }
+      },
+      saveSession: (session) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', session.id), session);
+        }
+      },
+      deleteSession: (sessionId) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId));
+        }
+      },
+      saveScheduledClass: (sch) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scheduledClasses', sch.id), sch);
+        }
+      },
+      deleteScheduledClass: (schId) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scheduledClasses', schId));
+        }
+      },
+      saveNotification: (notif) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notifications', notif.id), notif);
+        }
+      },
+      deleteNotification: (notifId) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notifications', notifId));
+        }
+      },
+      saveSettings: (settings) => {
+        if (db && window.PCB_DB.isFirebaseActive) {
+          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'tutorSettings'), settings);
+        }
+      },
+      INITIAL_STUDENTS,
+      INITIAL_SESSIONS,
+      INITIAL_SCHEDULED_CLASSES,
+      INITIAL_NOTIFICATIONS,
+      INITIAL_TUTOR_SETTINGS
+    };
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const formatMeetUrl = (url) => {
+      if (!url) return 'https://meet.google.com';
+      const trimmed = url.trim();
+      if (!/^https?:\/\//i.test(trimmed)) {
+        return 'https://' + trimmed;
+      }
+      return trimmed;
+    };
+
+    const getWhatsAppReminderUrl = (sch, studentPhone) => {
+      if (!studentPhone) return null;
+      const cleanPhone = studentPhone.replace(/\D/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const msg = `Hi ${sch.studentName}! 📚\n\nThis is a reminder for your 1:1 ${sch.subject} live class on *"${sch.topic}"* scheduled today at *${sch.time}* (${sch.date}) with Mukund Sir.\n\n🎥 Join Live Class here: ${formatMeetUrl(sch.meetUrl)}\n\nPlease be ready 5 minutes early!`;
+      return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
+    };
+
+    const MukundLogo = ({ className = "h-10" }) => (
+      <div className={`flex items-center space-x-3 select-none ${className}`}>
+        <div className="relative w-11 h-11 flex-shrink-0 bg-slate-900 rounded-xl p-1.5 shadow-md border border-slate-700 flex items-center justify-center">
+          <svg className="w-full h-full" viewBox="0 0 100 100" fill="none">
+            <path d="M15 70 C35 60, 48 70, 50 78 C52 70, 65 60, 85 70 L85 85 C65 75, 52 82, 50 88 C48 82, 35 75, 15 85 Z" fill="#1e293b" stroke="#38bdf8" strokeWidth="4" />
+            <path d="M50 78 L50 88" stroke="#38bdf8" strokeWidth="4" />
+            <path d="M44 55 L56 55 L53 72 L47 72 Z" fill="#f59e0b" />
+            <path d="M50 15 C58 28, 65 38, 60 50 C54 60, 46 60, 40 50 C35 38, 42 28, 50 15 Z" fill="url(#flameGrad)" />
+            <path d="M50 28 C54 36, 58 42, 55 48 C51 53, 47 53, 44 48 C41 42, 45 36, 50 28 Z" fill="#fef08a" />
+            <defs>
+              <linearGradient id="flameGrad" x1="50" y1="15" x2="50" y2="60" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#ef4444" />
+                <stop offset="50%" stopColor="#f97316" />
+                <stop offset="100%" stopColor="#eab308" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div className="flex flex-col justify-center">
+          <div className="flex items-center space-x-1.5 leading-none">
+            <span className="font-extrabold text-slate-900 tracking-tight text-xl font-sans uppercase">MUKUND</span>
+          </div>
+          <div className="flex items-center space-x-1 mt-0.5 leading-none">
+            <span className="font-extrabold text-emerald-700 tracking-wider text-xs font-sans uppercase">ONLINE CLASSES</span>
+          </div>
+          <div className="text-[9.5px] text-slate-600 font-semibold tracking-tight mt-1 flex items-center gap-1">
+            <span>Turning Every Stone, Shine Like a Diamond</span>
+            <span>💎</span>
+          </div>
+        </div>
+      </div>
+    );
+
+    const Icons = {
+      Atom: () => <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
+      Calendar: () => <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+      Bell: () => <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+      UserCheck: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      UserX: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      FileText: () => <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+      Video: () => <svg className="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+      PlusCircle: () => <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+      Trash: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+      ExternalLink: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
+      LogOut: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
+      Shield: () => <svg className="w-4 h-4 inline-block text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+      Settings: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+    };
+
+    const MAX_CAPACITY = 30;
+
+    function ResourceModal({ session, onClose }) {
+      if (!session) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                  session.subject === 'Physics' ? 'bg-indigo-500 text-white' :
+                  session.subject === 'Chemistry' ? 'bg-amber-500 text-white' :
+                  session.subject === 'Biology' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-white'
+                }`}>
+                  {session.subject}
+                </span>
+                <h3 className="font-bold text-sm truncate max-w-xs">{session.topic}</h3>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Session Details</p>
+                <p className="text-sm font-bold text-slate-800 mt-1">Student: {session.studentName}</p>
+                <p className="text-xs text-slate-600 mt-0.5">Logged Date: {session.date}</p>
+                {session.notesText && (
+                  <p className="text-xs text-slate-700 mt-2 bg-white p-2.5 rounded-lg border border-amber-200/60 font-mono">
+                    "{session.notesText}"
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Attached Study Resources</h4>
+                
+                {session.notesUrl ? (
+                  <a
+                    href={session.notesUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-emerald-900 transition group"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-emerald-600 text-white rounded-lg">
+                        <Icons.FileText />
+                      </div>
+                      <div>
+                        <p className="text-xs font-extrabold">View Session Notes PDF (Google Drive)</p>
+                        <p className="text-[11px] text-emerald-700 font-mono truncate max-w-xs">{session.notesUrl}</p>
+                      </div>
+                    </div>
+                    <Icons.ExternalLink />
+                  </a>
+                ) : (
+                  <div className="p-3 bg-slate-100 rounded-xl text-xs text-slate-500 italic">No notes PDF attached for this session.</div>
+                )}
+
+                {session.videoUrl ? (
+                  <a
+                    href={session.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl text-rose-900 transition group"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-rose-600 text-white rounded-lg">
+                        <Icons.Video />
+                      </div>
+                      <div>
+                        <p className="text-xs font-extrabold">Watch Video Recording (YouTube / Drive)</p>
+                        <p className="text-[11px] text-rose-700 font-mono truncate max-w-xs">{session.videoUrl}</p>
+                      </div>
+                    </div>
+                    <Icons.ExternalLink />
+                  </a>
+                ) : (
+                  <div className="p-3 bg-slate-100 rounded-xl text-xs text-slate-500 italic">No video recording link attached.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition"
+              >
+                Close Window
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SettingsModal({ tutorSettings, setTutorSettings, onClose, showToast, onClearAllData }) {
+      const [form, setForm] = useState({ ...tutorSettings });
+      const [showConfirmClear, setShowConfirmClear] = useState(false);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setTutorSettings(form);
+        if (window.PCB_DB && window.PCB_DB.saveSettings) {
+          window.PCB_DB.saveSettings(form);
+        }
+        showToast("Platform settings updated successfully!", "success");
+        onClose();
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden">
+            <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                <Icons.Settings /> Edit Tutor Platform Settings
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-white font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tutor Display Name</label>
+                <input
+                  type="text"
+                  required
+                  value={form.tutorName}
+                  onChange={(e) => setForm({ ...form, tutorName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Platform Header Name</label>
+                <input
+                  type="text"
+                  required
+                  value={form.platformName}
+                  onChange={(e) => setForm({ ...form, platformName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Standard Default Fee Per Class (₹)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="500"
+                  value={form.defaultFee || ''}
+                  onChange={(e) => setForm({ ...form, defaultFee: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-emerald-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Brand Tagline</label>
+                <input
+                  type="text"
+                  required
+                  value={form.tagline}
+                  onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Qualification Subtitle</label>
+                <input
+                  type="text"
+                  required
+                  value={form.qualification}
+                  onChange={(e) => setForm({ ...form, qualification: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200">
+                {!showConfirmClear ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmClear(true)}
+                    className="w-full py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  >
+                    <Icons.Trash /> Wipe & Clear All Database Records
+                  </button>
+                ) : (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
+                    <p className="text-xs font-bold text-red-900 text-center">Are you sure? This will clear all students, classes, and notes!</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClearAllData();
+                          setShowConfirmClear(false);
+                          onClose();
+                        }}
+                        className="flex-1 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold"
+                      >
+                        Yes, Clear Everything
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmClear(false)}
+                        className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function AuthScreen({ authMode, setAuthMode, loginRole, setLoginRole, users, setUsers, setCurrentUser, showToast, totalSeatsFilled, maxCapacity, tutorSettings }) {
+      const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+      const [signupForm, setSignupForm] = useState({
+        name: '',
+        username: '',
+        password: '',
+        phone: '',
+        grade: '12',
+        board: 'CBSE',
+        exams: []
+      });
+
+      const handleLoginSubmit = (e) => {
+        e.preventDefault();
+        const found = users.find(u => 
+          u.username.toLowerCase() === loginForm.username.trim().toLowerCase() && 
+          u.password === loginForm.password
+        );
+
+        if (found) {
+          setCurrentUser(found);
+          showToast(`Welcome back, ${found.name}!`, "success");
+        } else {
+          showToast("Invalid username or password. Please try again.", "error");
+        }
+      };
+
+      const handleExamToggle = (exam) => {
+        setSignupForm(prev => {
+          const exists = prev.exams.includes(exam);
+          return {
+            ...prev,
+            exams: exists ? prev.exams.filter(e => e !== exam) : [...prev.exams, exam]
+          };
+        });
+      };
+
+      const handleSignupSubmit = (e) => {
+        e.preventDefault();
+        if (!signupForm.name || !signupForm.username || !signupForm.password || !signupForm.phone) {
+          showToast("Please fill in all required fields including WhatsApp phone number.", "error");
+          return;
+        }
+
+        const usernameExists = users.some(u => u.username.toLowerCase() === signupForm.username.trim().toLowerCase());
+        if (usernameExists) {
+          showToast("Username is already taken. Please choose another.", "error");
+          return;
+        }
+
+        const isWaitlisted = totalSeatsFilled >= maxCapacity;
+        const newUser = {
+          id: 'user_' + Date.now(),
+          role: 'student',
+          name: signupForm.name.trim(),
+          username: signupForm.username.trim().toLowerCase(),
+          password: signupForm.password,
+          phone: signupForm.phone.trim(),
+          grade: signupForm.grade,
+          board: signupForm.board,
+          exams: signupForm.exams,
+          status: 'pending',
+          joinedDate: new Date().toISOString().split('T')[0]
+        };
+
+        setUsers(prev => [...prev, newUser]);
+        if (window.PCB_DB && window.PCB_DB.saveUser) {
+          window.PCB_DB.saveUser(newUser);
+        }
+
+        setCurrentUser(newUser);
+
+        if (isWaitlisted) {
+          showToast(`Registration submitted! Capacity of ${maxCapacity} seats is reached. You are on the waitlist for Mukund Sir's approval.`, "info");
+        } else {
+          showToast("Registration submitted successfully! Waiting for Mukund Sir's approval.", "success");
+        }
+      };
+
+      const handleQuickLogin = (username, password) => {
+        const found = users.find(u => u.username === username);
+        if (found) {
+          setCurrentUser(found);
+          showToast(`Logged in as ${found.name} (${found.role === 'tutor' ? 'Admin' : 'Student'})`, "success");
+        }
+      };
+
+      return (
+        <div className="max-w-4xl mx-auto py-6 space-y-8">
+          <div className="text-center space-y-3 bg-white p-8 rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden">
+            <div className="flex justify-center mb-2">
+              <MukundLogo className="h-12" />
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              1:1 Personalized PCB Coaching Portal
+            </h1>
+            <p className="text-sm text-slate-600 max-w-xl mx-auto font-medium">
+              Dedicated Physics, Chemistry & Biology Mentorship for Classes 9-12, NEET & KCET • Max 30 Seats Roster
+            </p>
+
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-full border border-emerald-200">
+                🎓 Cap: 30 Students Max
+              </span>
+              <span className="px-3 py-1 bg-sky-50 text-sky-800 text-xs font-bold rounded-full border border-sky-200">
+                ⚡ Physics • 🧪 Chemistry • 🧬 Biology
+              </span>
+              <span className="px-3 py-1 bg-amber-50 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
+                💎 Founder: Mukund Wankhede
+              </span>
+            </div>
+          </div>
+
+          <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+            <div className="flex border-b border-slate-200 bg-slate-100/80">
+              <button
+                onClick={() => setAuthMode('login')}
+                className={`flex-1 py-3.5 text-xs font-extrabold uppercase tracking-wider transition ${
+                  authMode === 'login' ? 'bg-white text-slate-900 border-b-2 border-emerald-600' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Sign In to Account
+              </button>
+              <button
+                onClick={() => setAuthMode('signup')}
+                className={`flex-1 py-3.5 text-xs font-extrabold uppercase tracking-wider transition ${
+                  authMode === 'signup' ? 'bg-white text-slate-900 border-b-2 border-emerald-600' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Student Request Enrollment
+              </button>
+            </div>
+
+            <div className="p-6">
+              {authMode === 'login' ? (
+                <div className="space-y-5">
+                  <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => { setLoginRole('student'); setLoginForm({ username: '', password: '' }); }}
+                      className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition ${loginRole === 'student' ? 'bg-emerald-700 text-white shadow' : 'text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      🎓 Student Login
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLoginRole('tutor'); setLoginForm({ username: 'mukund', password: '123' }); }}
+                      className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition ${loginRole === 'tutor' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      🔐 Admin (Mukund Wankhede)
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleLoginSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={loginRole === 'tutor' ? "mukund" : "Enter your username"}
+                        value={loginForm.username}
+                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className={`w-full py-3.5 text-white font-extrabold rounded-xl transition shadow-md ${
+                        loginRole === 'tutor' ? 'bg-slate-900 hover:bg-slate-800' : 'bg-emerald-700 hover:bg-emerald-800'
+                      }`}
+                    >
+                      Sign In as {loginRole === 'tutor' ? 'Admin' : 'Student'}
+                    </button>
+                  </form>
+
+                  {loginRole === 'tutor' && (
+                    <div className="pt-4 border-t border-slate-200 space-y-2">
+                      <p className="text-[11px] font-bold text-slate-500 uppercase text-center">⚡ Quick Admin Access</p>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickLogin('mukund', '123')}
+                        className="w-full p-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition flex items-center justify-center space-x-2 shadow-sm"
+                      >
+                        <span>👑 Quick Login as Mukund Wankhede (Admin)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleSignupSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Vikramaditya Sharma"
+                      value={signupForm.name}
+                      onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">WhatsApp Phone Number * (For Reminders)</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. 9876543210"
+                      value={signupForm.phone}
+                      onChange={(e) => setSignupForm({ ...signupForm, phone: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. vikram"
+                        value={signupForm.username}
+                        onChange={(e) => setSignupForm({ ...signupForm, username: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password *</label>
+                      <input
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={signupForm.password}
+                        onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Class / Grade *</label>
+                      <select
+                        value={signupForm.grade}
+                        onChange={(e) => setSignupForm({ ...signupForm, grade: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      >
+                        <option value="9">Class 9</option>
+                        <option value="10">Class 10</option>
+                        <option value="11">Class 11</option>
+                        <option value="12">Class 12</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Board *</label>
+                      <select
+                        value={signupForm.board}
+                        onChange={(e) => setSignupForm({ ...signupForm, board: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-600"
+                      >
+                        <option value="CBSE">CBSE Board</option>
+                        <option value="ICSE">ICSE Board</option>
+                        <option value="State">State Board</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Competitive Exam Tracks (Optional)</label>
+                    <div className="flex gap-4">
+                      {['NEET', 'KCET'].map(exam => (
+                        <label key={exam} className="flex items-center space-x-2 text-xs font-bold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={signupForm.exams.includes(exam)}
+                            onChange={() => handleExamToggle(exam)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                          />
+                          <span>{exam} Track</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold rounded-xl transition shadow-md"
+                  >
+                    Submit Enrollment Request
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function TutorDashboard({ tutorSettings, setTutorSettings, users, approvedStudents, pendingStudents, totalSeatsFilled, maxCapacity, sessions, scheduledClasses, onApproveStudent, onDeclineStudent, onRemoveStudent, onAddSession, onScheduleClass, onCancelScheduledClass, onDeleteSession, setResourceModal }) {
+      const [filterStudentId, setFilterStudentId] = useState('all');
+      const [activeTab, setActiveTab] = useState('schedule');
+
+      const [newScheduleForm, setNewScheduleForm] = useState({
+        studentId: approvedStudents[0]?.id || '',
+        subject: 'Physics',
+        topic: '',
+        date: new Date().toISOString().split('T')[0],
+        time: '05:00 PM',
+        feeAmount: tutorSettings.defaultFee || '500',
+        meetUrl: 'https://meet.google.com/new',
+        notes: ''
+      });
+
+      const [newSessionForm, setNewSessionForm] = useState({
+        studentId: approvedStudents[0]?.id || '',
+        subject: 'Physics',
+        topic: '',
+        date: new Date().toISOString().split('T')[0],
+        feeAmount: tutorSettings.defaultFee || '500',
+        notesUrl: '',
+        videoUrl: '',
+        notesText: ''
+      });
+
+      useEffect(() => {
+        if (!newSessionForm.studentId && approvedStudents.length > 0) {
+          setNewSessionForm(prev => ({ ...prev, studentId: approvedStudents[0].id, feeAmount: tutorSettings.defaultFee || '500' }));
+          setNewScheduleForm(prev => ({ ...prev, studentId: approvedStudents[0].id, feeAmount: tutorSettings.defaultFee || '500' }));
+        }
+      }, [approvedStudents, tutorSettings]);
+
+      const handleScheduleSubmit = (e) => {
+        e.preventDefault();
+        if (!newScheduleForm.studentId || !newScheduleForm.topic) return;
+        onScheduleClass(newScheduleForm);
+        setNewScheduleForm(prev => ({ ...prev, topic: '', notes: '', feeAmount: tutorSettings.defaultFee || '500' }));
+      };
+
+      const handleLogSubmit = (e) => {
+        e.preventDefault();
+        if (!newSessionForm.studentId || !newSessionForm.topic) return;
+        onAddSession(newSessionForm);
+        setNewSessionForm(prev => ({ ...prev, topic: '', notesUrl: '', videoUrl: '', notesText: '', feeAmount: tutorSettings.defaultFee || '500' }));
+      };
+
+      const handleCompleteAndLog = (schClass) => {
+        onAddSession({
+          studentId: schClass.studentId,
+          subject: schClass.subject,
+          topic: schClass.topic,
+          date: schClass.date,
+          feeAmount: schClass.feeAmount || tutorSettings.defaultFee || "500",
+          notesUrl: "",
+          videoUrl: schClass.meetUrl,
+          notesText: schClass.notes || "Live 1:1 class completed."
+        });
+        onCancelScheduledClass(schClass.id);
+      };
+
+      const filteredSessions = useMemo(() => {
+        if (filterStudentId === 'all') return sessions;
+        return sessions.filter(s => s.studentId === filterStudentId);
+      }, [sessions, filterStudentId]);
+
+      const totalFeesCollected = useMemo(() => {
+        return filteredSessions.reduce((sum, s) => sum + (parseFloat(s.feeAmount) || 0), 0);
+      }, [filteredSessions]);
+
+      const capacityPercentage = Math.min(Math.round((totalSeatsFilled / maxCapacity) * 100), 100);
+
+      return (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">30-Seat Roster</p>
+                <div className="flex items-baseline space-x-1.5 mt-1">
+                  <span className="text-2xl font-extrabold text-slate-900">{totalSeatsFilled}</span>
+                  <span className="text-slate-500 font-bold text-xs">/ {maxCapacity} Seats</span>
+                </div>
+                <div className="w-28 bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                  <div className="bg-emerald-600 h-1.5 rounded-full" style={{ width: `${capacityPercentage}%` }}></div>
+                </div>
+              </div>
+              <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-lg">🎓</div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Live Classes</p>
+                <span className="text-2xl font-extrabold text-sky-700 block mt-1">{scheduledClasses.length}</span>
+                <p className="text-[10px] text-slate-500 mt-0.5">Scheduled</p>
+              </div>
+              <div className="p-2.5 bg-sky-50 text-sky-700 rounded-xl font-bold text-lg">📅</div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pending Enroll</p>
+                <span className="text-2xl font-extrabold text-amber-700 block mt-1">{pendingStudents.length}</span>
+                <p className="text-[10px] text-slate-500 mt-0.5">Requests</p>
+              </div>
+              <div className="p-2.5 bg-amber-50 text-amber-700 rounded-xl font-bold text-lg">⏳</div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Logged Classes</p>
+                <span className="text-2xl font-extrabold text-indigo-700 block mt-1">{sessions.length}</span>
+                <p className="text-[10px] text-slate-500 mt-0.5">Completed</p>
+              </div>
+              <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-lg">📚</div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-200 bg-emerald-50/30 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Total Class Fees Logged</p>
+                <span className="text-2xl font-extrabold text-emerald-900 block mt-1">₹{totalFeesCollected.toLocaleString('en-IN')}</span>
+                <p className="text-[10px] text-emerald-700 mt-0.5">Across completed sessions</p>
+              </div>
+              <div className="p-2.5 bg-emerald-600 text-white rounded-xl font-bold text-lg">💰</div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-sm">30-Seat Interactive Register Roster</h3>
+                <p className="text-xs text-slate-500">Each box represents a 1:1 personalized coaching slot with Mukund Wankhede</p>
+              </div>
+              <span className="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-700 border">
+                {maxCapacity - totalSeatsFilled} Open Seats Remaining
+              </span>
+            </div>
+
+            <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 gap-2">
+              {Array.from({ length: maxCapacity }).map((_, idx) => {
+                const seatNum = idx + 1;
+                const student = approvedStudents.find(s => s.seatNumber === seatNum) || approvedStudents[idx];
+                const isOccupied = !!student;
+
+                return (
+                  <div
+                    key={seatNum}
+                    className={`p-2 rounded-xl text-center border flex flex-col justify-between h-16 transition ${
+                      isOccupied ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
+                    }`}
+                  >
+                    <span className="text-[9px] font-extrabold block text-left">#{seatNum}</span>
+                    {isOccupied ? (
+                      <div className="truncate">
+                        <p className="text-[10px] font-extrabold leading-none truncate">{student.name}</p>
+                        <span className="text-[8px] font-semibold text-emerald-700">Cl. {student.grade}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[9px] font-semibold italic text-slate-400">Open Slot</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 space-y-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-amber-500/10 px-4 py-3 border-b border-amber-200 flex justify-between items-center">
+                  <h3 className="font-extrabold text-amber-900 text-sm flex items-center gap-1.5">
+                    <span>📩</span> Pending Requests ({pendingStudents.length})
+                  </h3>
+                </div>
+
+                <div className="p-4 space-y-3">
+                  {pendingStudents.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic text-center py-4">No pending enrollment requests.</p>
+                  ) : (
+                    pendingStudents.map(student => (
+                      <div key={student.id} className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-sm text-slate-900">{student.name}</p>
+                            <p className="text-xs text-slate-500">Class {student.grade} • {student.board} Board</p>
+                            {student.phone && <p className="text-[11px] text-slate-600">📱 {student.phone}</p>}
+                          </div>
+                          <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">Pending</span>
+                        </div>
+                        {student.exams && student.exams.length > 0 && (
+                          <div className="flex gap-1">
+                            {student.exams.map(e => (
+                              <span key={e} className="text-[10px] font-semibold bg-white border border-amber-300 text-amber-800 px-1.5 py-0.5 rounded">
+                                {e}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => onApproveStudent(student.id)}
+                            className="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1"
+                          >
+                            <Icons.UserCheck /> Approve Spot
+                          </button>
+                          <button
+                            onClick={() => onDeclineStudent(student.id)}
+                            className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg text-xs font-bold transition"
+                            title="Decline"
+                          >
+                            <Icons.UserX />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
+                  <h3 className="font-extrabold text-sm flex items-center gap-1.5">
+                    <span>🎓</span> Enrolled Roster ({approvedStudents.length}/{maxCapacity})
+                  </h3>
+                </div>
+
+                <div className="p-4 divide-y divide-slate-100 max-h-[400px] overflow-y-auto space-y-2">
+                  {approvedStudents.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic text-center py-4">No enrolled students yet.</p>
+                  ) : (
+                    approvedStudents.map(st => (
+                      <div key={st.id} className="pt-2 flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                              Seat #{st.seatNumber || '-'}
+                            </span>
+                            <span className="font-bold text-sm text-slate-900">{st.name}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Class {st.grade} ({st.board}) {st.phone ? `• 📱 ${st.phone}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => onRemoveStudent(st.id)}
+                          className="text-slate-400 hover:text-red-600 p-1 rounded transition"
+                          title="Remove Student & Free Seat"
+                        >
+                          <Icons.Trash />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 space-y-6">
+              <div className="flex bg-slate-200/80 p-1 rounded-xl gap-1">
+                <button
+                  onClick={() => setActiveTab('schedule')}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                    activeTab === 'schedule' ? 'bg-sky-800 text-white shadow-md' : 'text-slate-700 hover:bg-slate-300/60'
+                  }`}
+                >
+                  <Icons.Calendar /> Schedule Upcoming Live Class & Notify
+                </button>
+                <button
+                  onClick={() => setActiveTab('log')}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-2 ${
+                    activeTab === 'log' ? 'bg-emerald-800 text-white shadow-md' : 'text-slate-700 hover:bg-slate-300/60'
+                  }`}
+                >
+                  <Icons.PlusCircle /> Log Completed Past Session Notes
+                </button>
+              </div>
+
+              {activeTab === 'schedule' ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b pb-3">
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <Icons.Calendar /> Schedule a 1:1 Live Class with Notification
+                    </h3>
+                    <span className="text-xs font-bold text-sky-700 bg-sky-50 px-2.5 py-1 rounded-full border border-sky-200">
+                      Mukund Wankhede
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleScheduleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Select Enrolled Student *</label>
+                        <select
+                          value={newScheduleForm.studentId}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, studentId: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-sky-600"
+                          required
+                        >
+                          {approvedStudents.length === 0 && <option value="">No enrolled students available</option>}
+                          {approvedStudents.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} (Class {s.grade} - {s.board})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Subject Tag *</label>
+                        <select
+                          value={newScheduleForm.subject}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, subject: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-sky-600"
+                        >
+                          <option value="Physics">⚡ Physics</option>
+                          <option value="Chemistry">🧪 Chemistry</option>
+                          <option value="Biology">🧬 Biology</option>
+                          <option value="General">📖 General Guidance</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Topic / Chapter Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Electrostatics & Coulomb's Law Numericals"
+                        value={newScheduleForm.topic}
+                        onChange={(e) => setNewScheduleForm({ ...newScheduleForm, topic: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Class Date *</label>
+                        <input
+                          type="date"
+                          required
+                          value={newScheduleForm.date}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, date: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Class Start Time *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. 05:30 PM"
+                          value={newScheduleForm.time}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, time: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Class Fee (₹) *</label>
+                        <input
+                          type="number"
+                          required
+                          placeholder="500"
+                          value={newScheduleForm.feeAmount}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, feeAmount: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-emerald-800 focus:ring-2 focus:ring-sky-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Live Meeting Link</label>
+                        <input
+                          type="url"
+                          placeholder="https://meet.google.com/..."
+                          value={newScheduleForm.meetUrl}
+                          onChange={(e) => setNewScheduleForm({ ...newScheduleForm, meetUrl: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Instructions / Homework Check Note for Student</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Keep NCERT Physics Class 12 Part 2 textbook ready."
+                        value={newScheduleForm.notes}
+                        onChange={(e) => setNewScheduleForm({ ...newScheduleForm, notes: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={approvedStudents.length === 0}
+                      className="w-full py-3 bg-sky-800 hover:bg-sky-900 disabled:bg-slate-300 text-white font-bold rounded-xl transition shadow-md flex items-center justify-center gap-2"
+                    >
+                      <span>🔔</span> Schedule Live Class & Send Student Notification
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b pb-3">
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <Icons.PlusCircle /> Log Completed 1:1 Coaching Notes
+                    </h3>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                      Mukund Wankhede
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleLogSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Select Enrolled Student *</label>
+                        <select
+                          value={newSessionForm.studentId}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, studentId: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-600"
+                          required
+                        >
+                          {approvedStudents.length === 0 && <option value="">No enrolled students available</option>}
+                          {approvedStudents.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} (Class {s.grade} - {s.board})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Subject Tag *</label>
+                        <select
+                          value={newSessionForm.subject}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, subject: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-emerald-600"
+                        >
+                          <option value="Physics">⚡ Physics</option>
+                          <option value="Chemistry">🧪 Chemistry</option>
+                          <option value="Biology">🧬 Biology</option>
+                          <option value="General">📖 General Guidance</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Topic / Chapter Covered *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Optics & Wave Interference Numericals"
+                          value={newSessionForm.topic}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, topic: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Class Fee (₹) *</label>
+                        <input
+                          type="number"
+                          required
+                          placeholder="500"
+                          value={newSessionForm.feeAmount}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, feeAmount: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-emerald-800 focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Notes PDF Link (Google Drive / Cloud)</label>
+                        <input
+                          type="url"
+                          placeholder="https://drive.google.com/file/d/..."
+                          value={newSessionForm.notesUrl}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, notesUrl: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Video Recording Link (YouTube / Drive)</label>
+                        <input
+                          type="url"
+                          placeholder="https://youtube.com/watch?v=..."
+                          value={newSessionForm.videoUrl}
+                          onChange={(e) => setNewSessionForm({ ...newSessionForm, videoUrl: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Session Summary / Key Takeaways Notes</label>
+                      <textarea
+                        rows="2"
+                        placeholder="e.g. Solved 12 entrance exam MCQs. Homework assigned from NCERT Chapter 3."
+                        value={newSessionForm.notesText}
+                        onChange={(e) => setNewSessionForm({ ...newSessionForm, notesText: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={approvedStudents.length === 0}
+                      className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white font-bold rounded-xl transition shadow-md flex items-center justify-center gap-2"
+                    >
+                      <span>📝</span> Save Session to Student's Private Register
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                    <Icons.Calendar /> Upcoming 1:1 Scheduled Live Classes ({scheduledClasses.length})
+                  </h3>
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                  {scheduledClasses.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic py-4 text-center">No upcoming live classes scheduled.</p>
+                  ) : (
+                    scheduledClasses.map(sch => {
+                      const studentObj = users.find(u => u.id === sch.studentId);
+                      const waUrl = getWhatsAppReminderUrl(sch, studentObj?.phone);
+
+                      return (
+                        <div key={sch.id} className="p-3.5 rounded-xl border border-sky-200 bg-sky-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-sky-800 text-white">
+                                {sch.subject}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Fee: ₹{sch.feeAmount || tutorSettings.defaultFee || '500'}
+                              </span>
+                              <span className="font-bold text-sm text-slate-900">{sch.topic}</span>
+                            </div>
+                            <p className="text-xs text-slate-600">
+                              Student: <strong className="text-slate-800">{sch.studentName}</strong> • 📅 {sch.date} at {sch.time}
+                            </p>
+                            {sch.notes && <p className="text-[11px] text-slate-500 italic">"{sch.notes}"</p>}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {waUrl ? (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                                title="Send pre-filled WhatsApp reminder to student"
+                              >
+                                <span>📲</span> WhatsApp Reminder
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">No Phone</span>
+                            )}
+
+                            <button
+                              onClick={() => handleCompleteAndLog(sch)}
+                              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                              title="Mark class completed and register fee + notes in student register"
+                            >
+                              ✅ Complete & Log Fee
+                            </button>
+                            <button
+                              onClick={() => onCancelScheduledClass(sch.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 rounded transition"
+                              title="Cancel Class"
+                            >
+                              <Icons.Trash />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b pb-3">
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                    <span>🗓️</span> Completed 1:1 Coaching Register Log ({filteredSessions.length})
+                  </h3>
+
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-slate-500">Filter:</span>
+                    <select
+                      value={filterStudentId}
+                      onChange={(e) => setFilterStudentId(e.target.value)}
+                      className="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-xs font-semibold"
+                    >
+                      <option value="all">All Enrolled Students</option>
+                      {approvedStudents.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {filteredSessions.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic py-6 text-center">No sessions logged for the selected filter.</p>
+                  ) : (
+                    filteredSessions.map(sess => (
+                      <div key={sess.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                              sess.subject === 'Physics' ? 'bg-indigo-100 text-indigo-800' :
+                              sess.subject === 'Chemistry' ? 'bg-amber-100 text-amber-800' :
+                              sess.subject === 'Biology' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-800'
+                            }`}>
+                              {sess.subject}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              Fee: ₹{sess.feeAmount || tutorSettings.defaultFee || '500'}
+                            </span>
+                            <span className="font-bold text-sm text-slate-900">{sess.topic}</span>
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Student: <strong className="text-slate-800">{sess.studentName}</strong> • Date: {sess.date}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => setResourceModal(sess)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
+                          >
+                            <Icons.FileText /> View Notes & Video
+                          </button>
+                          <button
+                            onClick={() => onDeleteSession(sess.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded transition"
+                            title="Delete Entry"
+                          >
+                            <Icons.Trash />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function StudentDashboard({ student, sessions, scheduledClasses, notifications, tutorSettings, setResourceModal, onMarkNotificationRead, onDismissAllNotifications }) {
+      const [subjectFilter, setSubjectFilter] = useState('ALL');
+
+      const myNotifications = useMemo(() => {
+        return notifications.filter(n => n.studentId === student.id);
+      }, [notifications, student.id]);
+
+      const unreadNotifs = useMemo(() => myNotifications.filter(n => !n.read), [myNotifications]);
+
+      const totalStudentFees = useMemo(() => {
+        return sessions.reduce((sum, s) => sum + (parseFloat(s.feeAmount) || 0), 0);
+      }, [sessions]);
+
+      const availableSubjects = useMemo(() => {
+        const set = new Set();
+        sessions.forEach(s => set.add(s.subject));
+        return Array.from(set);
+      }, [sessions]);
+
+      const filteredSessions = useMemo(() => {
+        if (subjectFilter === 'ALL') return sessions;
+        return sessions.filter(s => s.subject === subjectFilter);
+      }, [sessions, subjectFilter]);
+
+      return (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white rounded-2xl p-6 shadow-lg border border-slate-700 relative overflow-hidden">
+            <div className="relative z-10 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider border ${
+                  student.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}>
+                  {student.status === 'approved' ? `Seat #${student.seatNumber || 'Enrolled'}` : 'Waitlist / Pending'}
+                </span>
+                <span className="text-slate-300 text-xs font-medium">Class {student.grade} ({student.board} Board)</span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 ml-auto">
+                  Total Attended Fees: ₹{totalStudentFees.toLocaleString('en-IN')}
+                </span>
+              </div>
+              <h2 className="text-2xl font-extrabold tracking-tight">Welcome back, {student.name}!</h2>
+              <p className="text-xs text-slate-300 max-w-xl">
+                {tutorSettings.tagline} • Mentorship with {tutorSettings.tutorName}
+              </p>
+            </div>
+          </div>
+
+          {unreadNotifs.length > 0 && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 shadow-md space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">🔔</span>
+                  <h3 className="font-extrabold text-amber-950 text-sm">
+                    You have {unreadNotifs.length} new class notification{unreadNotifs.length > 1 ? 's' : ''}!
+                  </h3>
+                </div>
+                <button
+                  onClick={() => onDismissAllNotifications(student.id)}
+                  className="text-xs font-bold text-amber-900 hover:underline"
+                >
+                  Mark All Read
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {unreadNotifs.map(n => (
+                  <div key={n.id} className="bg-white p-3 rounded-xl border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-xs text-slate-900">{n.title}</p>
+                      <p className="text-xs text-slate-600">{n.message}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {n.meetUrl && (
+                        <a
+                          href={formatMeetUrl(n.meetUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 shadow"
+                        >
+                          <span>🎥 Join Class</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      <button
+                        onClick={() => onMarkNotificationRead(n.id)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {student.status === 'pending' ? (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 text-amber-900 space-y-3 shadow-sm">
+              <div className="flex items-center space-x-3">
+                <span className="text-2xl">⏳</span>
+                <h3 className="font-extrabold text-base">Your Enrollment Request is Pending Review</h3>
+              </div>
+              <p className="text-xs leading-relaxed">
+                Thank you for applying to Mukund Online Classes! Mukund Sir coaches a maximum of 30 students at a time to ensure 100% personalized 1:1 focus. Your request is in the queue and you will receive access as soon as Mukund Sir approves your enrollment slot.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <Icons.Calendar /> Upcoming Scheduled Live 1:1 Classes
+                    </h3>
+                    <p className="text-xs text-slate-500">Live online interactive sessions with Mukund Wankhede</p>
+                  </div>
+                  <span className="text-xs font-bold text-sky-800 bg-sky-50 px-2.5 py-1 rounded-full border border-sky-200">
+                    {scheduledClasses.length} Scheduled
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {scheduledClasses.length === 0 ? (
+                    <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <p className="text-slate-600 font-semibold text-xs">No upcoming live classes scheduled right now.</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Mukund Sir will notify you here when your next 1:1 session is scheduled!</p>
+                    </div>
+                  ) : (
+                    scheduledClasses.map(sch => (
+                      <div key={sch.id} className="p-4 rounded-2xl border border-sky-200 bg-sky-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-sky-800 text-white">
+                              {sch.subject}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Fee: ₹{sch.feeAmount || tutorSettings.defaultFee || '500'}
+                            </span>
+                            <span className="font-extrabold text-sm text-slate-900">{sch.topic}</span>
+                          </div>
+                          <p className="text-xs text-slate-600 flex items-center gap-2">
+                            <span>📅 Date: <strong>{sch.date}</strong></span>
+                            <span>⏰ Time: <strong>{sch.time}</strong></span>
+                          </p>
+                          {sch.notes && (
+                            <p className="text-xs text-slate-700 bg-white p-2 rounded-lg border border-sky-200/80 font-mono">
+                              💬 Note: "{sch.notes}"
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end">
+                          <a
+                            href={formatMeetUrl(sch.meetUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full sm:w-auto px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95"
+                          >
+                            <span className="animate-pulse text-base">🎥</span>
+                            <span>Join 1:1 Live Class</span>
+                            <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                          <span className="text-[10px] text-emerald-800 font-semibold mt-1">
+                            Opens Google Meet / Zoom in a new tab ↗
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b pb-4">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-lg">My 1:1 Learning Register</h3>
+                    <p className="text-xs text-slate-500">Your personalized class notes and recording history with Mukund Sir</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      onClick={() => setSubjectFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${subjectFilter === 'ALL' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      All ({sessions.length})
+                    </button>
+                    {availableSubjects.map(subj => (
+                      <button
+                        key={subj}
+                        onClick={() => setSubjectFilter(subj)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${subjectFilter === subj ? 'bg-emerald-700 text-white shadow' : 'text-slate-600 hover:bg-slate-200'}`}
+                      >
+                        {subj === 'Physics' ? '⚡ Physics' : subj === 'Chemistry' ? '🧪 Chemistry' : subj === 'Biology' ? '🧬 Biology' : subj}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {filteredSessions.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <p className="text-slate-600 font-semibold text-sm">No 1:1 sessions logged for this subject yet.</p>
+                      <p className="text-xs text-slate-500 mt-1">Mukund Sir will update your personal notes after your next class!</p>
+                    </div>
+                  ) : (
+                    filteredSessions.map(sess => (
+                      <div key={sess.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3 hover:shadow-md transition">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                                sess.subject === 'Physics' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                                sess.subject === 'Chemistry' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                sess.subject === 'Biology' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-800'
+                              }`}>
+                                {sess.subject}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                Fee: ₹{sess.feeAmount || tutorSettings.defaultFee || '500'}
+                              </span>
+                            </div>
+                            <h4 className="font-extrabold text-slate-900 text-base mt-1.5">{sess.topic}</h4>
+                          </div>
+                          <span className="text-xs font-bold text-slate-500 bg-white px-2.5 py-1 rounded-lg border">
+                            📅 {sess.date}
+                          </span>
+                        </div>
+
+                        {sess.notesText && (
+                          <p className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200/80 font-mono">
+                            {sess.notesText}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200/60">
+                          {sess.notesUrl ? (
+                            <a
+                              href={sess.notesUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Icons.FileText /> Open Notes PDF
+                            </a>
+                          ) : (
+                            <span className="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs italic">No Notes Link</span>
+                          )}
+
+                          {sess.videoUrl ? (
+                            <a
+                              href={sess.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3.5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Icons.Video /> Watch Recording
+                            </a>
+                          ) : (
+                            <span className="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs italic">No Video Link</span>
+                          )}
+
+                          <button
+                            onClick={() => setResourceModal(sess)}
+                            className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg text-xs transition ml-auto"
+                          >
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [tutorSettings, setTutorSettings] = useState(() => {
+        const saved = localStorage.getItem('pcb_tutor_settings');
+        return saved ? JSON.parse(saved) : (window.PCB_DB?.INITIAL_TUTOR_SETTINGS || {});
+      });
+
+      const [users, setUsers] = useState(() => {
+        const saved = localStorage.getItem('pcb_users');
+        return saved ? JSON.parse(saved) : (window.PCB_DB?.INITIAL_STUDENTS || []);
+      });
+
+      const [sessions, setSessions] = useState(() => {
+        const saved = localStorage.getItem('pcb_sessions');
+        return saved ? JSON.parse(saved) : (window.PCB_DB?.INITIAL_SESSIONS || []);
+      });
+
+      const [scheduledClasses, setScheduledClasses] = useState(() => {
+        const saved = localStorage.getItem('pcb_scheduled_classes');
+        return saved ? JSON.parse(saved) : (window.PCB_DB?.INITIAL_SCHEDULED_CLASSES || []);
+      });
+
+      const [notifications, setNotifications] = useState(() => {
+        const saved = localStorage.getItem('pcb_notifications');
+        return saved ? JSON.parse(saved) : (window.PCB_DB?.INITIAL_NOTIFICATIONS || []);
+      });
+
+      const [currentUser, setCurrentUser] = useState(() => {
+        const saved = localStorage.getItem('pcb_current_user');
+        if (saved) {
+          try { return JSON.parse(saved); } catch(e) {}
+        }
+        return null;
+      });
+
+      const [authMode, setAuthMode] = useState('login');
+      const [loginRole, setLoginRole] = useState('student');
+      const [resourceModal, setResourceModal] = useState(null); 
+      const [notification, setNotification] = useState(null);
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      const [dbStatus, setDbStatus] = useState({ active: false, label: "Connecting..." });
+
+      useEffect(() => {
+        if (window.PCB_DB && window.PCB_DB.initRealtimeListeners) {
+          window.PCB_DB.initRealtimeListeners(
+            (status) => setDbStatus(status),
+            (key, data) => {
+              if (key === 'users') setUsers(data);
+              if (key === 'sessions') setSessions(data);
+              if (key === 'scheduledClasses') setScheduledClasses(data);
+              if (key === 'notifications') setNotifications(data);
+              if (key === 'tutorSettings') setTutorSettings(data);
+            }
+          );
+        }
+      }, []);
+
+      useEffect(() => {
+        localStorage.setItem('pcb_tutor_settings', JSON.stringify(tutorSettings));
+      }, [tutorSettings]);
+
+      useEffect(() => {
+        localStorage.setItem('pcb_users', JSON.stringify(users));
+      }, [users]);
+
+      useEffect(() => {
+        localStorage.setItem('pcb_sessions', JSON.stringify(sessions));
+      }, [sessions]);
+
+      useEffect(() => {
+        localStorage.setItem('pcb_scheduled_classes', JSON.stringify(scheduledClasses));
+      }, [scheduledClasses]);
+
+      useEffect(() => {
+        localStorage.setItem('pcb_notifications', JSON.stringify(notifications));
+      }, [notifications]);
+
+      useEffect(() => {
+        if (currentUser) {
+          localStorage.setItem('pcb_current_user', JSON.stringify(currentUser));
+        } else {
+          localStorage.removeItem('pcb_current_user');
+        }
+      }, [currentUser]);
+
+      const approvedStudents = useMemo(() => {
+        return users.filter(u => u.role === 'student' && u.status === 'approved');
+      }, [users]);
+
+      const pendingStudents = useMemo(() => {
+        return users.filter(u => u.role === 'student' && u.status === 'pending');
+      }, [users]);
+
+      const totalSeatsFilled = approvedStudents.length;
+
+      const showToast = (message, type = 'info') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4000);
+      };
+
+      const handleApproveStudent = (studentId) => {
+        if (totalSeatsFilled >= MAX_CAPACITY) {
+          showToast(`Maximum capacity of ${MAX_CAPACITY} students reached! Cannot approve more students right now.`, 'error');
+          return;
+        }
+
+        const nextSeatNum = totalSeatsFilled + 1;
+        const updatedUsers = users.map(u => {
+          if (u.id === studentId) {
+            const updated = { ...u, status: 'approved', seatNumber: nextSeatNum };
+            if (window.PCB_DB && window.PCB_DB.saveUser) window.PCB_DB.saveUser(updated);
+            return updated;
+          }
+          return u;
+        });
+        setUsers(updatedUsers);
+        showToast("Student enrollment approved successfully!", "success");
+      };
+
+      const handleDeclineStudent = (studentId) => {
+        setUsers(prev => prev.filter(u => u.id !== studentId));
+        if (window.PCB_DB && window.PCB_DB.deleteUser) window.PCB_DB.deleteUser(studentId);
+        showToast("Student application declined.", "info");
+      };
+
+      const handleRemoveStudent = (studentId) => {
+        setUsers(prev => prev.filter(u => u.id !== studentId));
+        setSessions(prev => prev.filter(s => s.studentId !== studentId));
+        if (window.PCB_DB && window.PCB_DB.deleteUser) window.PCB_DB.deleteUser(studentId);
+        showToast("Student removed from enrollment roster.", "info");
+      };
+
+      const handleAddSession = (newSessionData) => {
+        const student = users.find(u => u.id === newSessionData.studentId);
+        const newSession = {
+          id: 'sess_' + Date.now(),
+          studentId: newSessionData.studentId,
+          studentName: student ? student.name : "Student",
+          subject: newSessionData.subject,
+          topic: newSessionData.topic,
+          date: newSessionData.date,
+          feeAmount: newSessionData.feeAmount || tutorSettings.defaultFee || "500",
+          notesUrl: newSessionData.notesUrl || "",
+          videoUrl: newSessionData.videoUrl || "",
+          notesText: newSessionData.notesText || ""
+        };
+
+        setSessions(prev => [newSession, ...prev]);
+        if (window.PCB_DB && window.PCB_DB.saveSession) window.PCB_DB.saveSession(newSession);
+        showToast(`Logged 1:1 ${newSessionData.subject} coaching session (Fee: ₹${newSession.feeAmount})!`, "success");
+      };
+
+      const handleScheduleClass = (newClassData) => {
+        const student = users.find(u => u.id === newClassData.studentId);
+        const newClass = {
+          id: 'sch_' + Date.now(),
+          studentId: newClassData.studentId,
+          studentName: student ? student.name : "Student",
+          subject: newClassData.subject,
+          topic: newClassData.topic,
+          date: newClassData.date,
+          time: newClassData.time || "05:00 PM",
+          feeAmount: newClassData.feeAmount || tutorSettings.defaultFee || "500",
+          meetUrl: newClassData.meetUrl || "https://meet.google.com/new",
+          notes: newClassData.notes || "",
+          status: "upcoming"
+        };
+
+        const newNotif = {
+          id: 'notif_' + Date.now(),
+          studentId: newClassData.studentId,
+          title: `New 1:1 ${newClassData.subject} Class Scheduled! 📅`,
+          message: `Mukund Sir scheduled a live class on "${newClassData.topic}" for ${newClassData.date} at ${newClassData.time || "05:00 PM"} (Fee: ₹${newClass.feeAmount}).`,
+          meetUrl: newClassData.meetUrl || "https://meet.google.com/new",
+          date: new Date().toISOString().split('T')[0],
+          read: false
+        };
+
+        setScheduledClasses(prev => [newClass, ...prev]);
+        setNotifications(prev => [newNotif, ...prev]);
+
+        if (window.PCB_DB && window.PCB_DB.saveScheduledClass) {
+          window.PCB_DB.saveScheduledClass(newClass);
+          window.PCB_DB.saveNotification(newNotif);
+        }
+
+        showToast(`Scheduled 1:1 class for ${student ? student.name : 'Student'} (Fee: ₹${newClass.feeAmount}) & notified!`, "success");
+      };
+
+      const handleCancelScheduledClass = (schId) => {
+        setScheduledClasses(prev => prev.filter(c => c.id !== schId));
+        if (window.PCB_DB && window.PCB_DB.deleteScheduledClass) window.PCB_DB.deleteScheduledClass(schId);
+        showToast("Scheduled class cancelled.", "info");
+      };
+
+      const handleDeleteSession = (sessionId) => {
+        setSessions(prev => prev.filter(s => s.id !== sessionId));
+        if (window.PCB_DB && window.PCB_DB.deleteSession) window.PCB_DB.deleteSession(sessionId);
+        showToast("Session log entry deleted.", "info");
+      };
+
+      const handleMarkNotificationRead = (notifId) => {
+        setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
+        if (window.PCB_DB && window.PCB_DB.saveNotification) {
+          const target = notifications.find(n => n.id === notifId);
+          if (target) window.PCB_DB.saveNotification({ ...target, read: true });
+        }
+      };
+
+      const handleDismissAllNotifications = (studentId) => {
+        setNotifications(prev => prev.map(n => n.studentId === studentId ? { ...n, read: true } : n));
+        notifications.filter(n => n.studentId === studentId).forEach(n => {
+          if (window.PCB_DB && window.PCB_DB.saveNotification) window.PCB_DB.saveNotification({ ...n, read: true });
+        });
+      };
+
+      const handleClearAllData = () => {
+        setSessions([]);
+        setScheduledClasses([]);
+        setNotifications([]);
+        const cleanUsers = [
+          { id: "tutor1", username: "mukund", password: "123", role: "tutor", name: "Mukund Wankhede", status: "approved" }
+        ];
+        setUsers(cleanUsers);
+        localStorage.clear();
+        showToast("Database records wiped cleanly!", "info");
+      };
+
+      const studentSessions = useMemo(() => {
+        if (!currentUser || currentUser.role !== 'student') return [];
+        return sessions.filter(s => s.studentId === currentUser.id);
+      }, [sessions, currentUser]);
+
+      const studentScheduledClasses = useMemo(() => {
+        if (!currentUser || currentUser.role !== 'student') return [];
+        return scheduledClasses.filter(c => c.studentId === currentUser.id);
+      }, [scheduledClasses, currentUser]);
+
+      return (
+        <div className="min-h-screen flex flex-col paper-texture">
+          {notification && (
+            <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-xs font-bold transition transform animate-bounce flex items-center gap-2 ${
+              notification.type === 'success' ? 'bg-emerald-900 text-emerald-100 border-emerald-700' :
+              notification.type === 'error' ? 'bg-red-900 text-red-100 border-red-700' : 'bg-slate-900 text-slate-100 border-slate-700'
+            }`}>
+              <span>{notification.type === 'success' ? '✅' : notification.type === 'error' ? '⚠️' : 'ℹ️'}</span>
+              <span>{notification.message}</span>
+            </div>
+          )}
+
+          <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+              <MukundLogo />
+
+              <div className="flex items-center space-x-3">
+                <span className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold border ${
+                  dbStatus.active ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${dbStatus.active ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                  {dbStatus.label}
+                </span>
+
+                {currentUser && (
+                  <div className="flex items-center space-x-2">
+                    {currentUser.role === 'tutor' && (
+                      <button
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition"
+                        title="Edit Settings"
+                      >
+                        <Icons.Settings />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setCurrentUser(null); showToast("Signed out safely.", "info"); }}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                    >
+                      <Icons.LogOut /> <span className="hidden sm:inline">Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {!currentUser ? (
+              <AuthScreen
+                authMode={authMode}
+                setAuthMode={setAuthMode}
+                loginRole={loginRole}
+                setLoginRole={setLoginRole}
+                users={users}
+                setUsers={setUsers}
+                setCurrentUser={setCurrentUser}
+                showToast={showToast}
+                totalSeatsFilled={totalSeatsFilled}
+                maxCapacity={MAX_CAPACITY}
+                tutorSettings={tutorSettings}
+              />
+            ) : currentUser.role === 'tutor' ? (
+              <TutorDashboard
+                tutorSettings={tutorSettings}
+                setTutorSettings={setTutorSettings}
+                users={users}
+                approvedStudents={approvedStudents}
+                pendingStudents={pendingStudents}
+                totalSeatsFilled={totalSeatsFilled}
+                maxCapacity={MAX_CAPACITY}
+                sessions={sessions}
+                scheduledClasses={scheduledClasses}
+                onApproveStudent={handleApproveStudent}
+                onDeclineStudent={handleDeclineStudent}
+                onRemoveStudent={handleRemoveStudent}
+                onAddSession={handleAddSession}
+                onScheduleClass={handleScheduleClass}
+                onCancelScheduledClass={handleCancelScheduledClass}
+                onDeleteSession={handleDeleteSession}
+                setResourceModal={setResourceModal}
+              />
+            ) : (
+              <StudentDashboard
+                student={currentUser}
+                sessions={studentSessions}
+                scheduledClasses={studentScheduledClasses}
+                notifications={notifications}
+                tutorSettings={tutorSettings}
+                setResourceModal={setResourceModal}
+                onMarkNotificationRead={handleMarkNotificationRead}
+                onDismissAllNotifications={handleDismissAllNotifications}
+              />
+            )}
+          </main>
+
+          <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 font-medium">
+            <p>{tutorSettings.platformName} • {tutorSettings.tagline}</p>
+          </footer>
+
+          {resourceModal && (
+            <ResourceModal
+              session={resourceModal}
+              onClose={() => setResourceModal(null)}
+            />
+          )}
+
+          {isSettingsOpen && (
+            <SettingsModal
+              tutorSettings={tutorSettings}
+              setTutorSettings={setTutorSettings}
+              onClose={() => setIsSettingsOpen(false)}
+              showToast={showToast}
+              onClearAllData={handleClearAllData}
+            />
+          )}
+        </div>
+      );
+    }
+
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
